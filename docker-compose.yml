@@ -1,29 +1,129 @@
 version: '3.8'
 
 services:
-  hadoop-single:
-    build: .
-    container_name: hadoop-single
-    hostname: hadoop-single
+  namenode:
+    image: hadoop-multi:latest
+    container_name: namenode
+    hostname: namenode
     ports:
-      - "9870:9870"  # HDFS NameNode Web UI
-      - "8088:8088"  # YARN ResourceManager Web UI
-      - "9864:9864"  # DataNode Web UI
-      - "8042:8042"  # NodeManager Web UI
-      - "9000:9000"  # HDFS NameNode
-    volumes:
-      - ./hadoop-config:/opt/hadoop/etc/hadoop
-      - hadoop-data:/tmp/hadoop-root
+      - "9870:9870"
+      # - "9000:9000"
+      - "50070:50070"
     environment:
-      - JAVA_HOME=/usr/lib/jvm/java-8-openjdk
-    command: >
-      bash -c "
-        service ssh start &&
-        hdfs namenode -format -force &&
-        start-dfs.sh &&
-        start-yarn.sh &&
-        tail -f /dev/null
-      "
+      - CLUSTER_NAME=hadoop-cluster
+      - NODE_TYPE=namenode
+    volumes:
+      - ./config/namenode:/home/hadoop/hadoop/etc/hadoop
+      - namenode_data:/home/hadoop/hdfs/namenode
+      - ./scripts:/home/hadoop/scripts
+    networks:
+      - hadoop-network
+    command: /home/hadoop/scripts/start-namenode.sh
+
+  datanode1:
+    image: hadoop-multi:latest
+    container_name: datanode1
+    hostname: datanode1
+    depends_on:
+      - namenode
+    ports:
+      - "9864:9864"
+      - "50075:50075"
+    environment:
+      - NODE_TYPE=datanode
+      - NAMENODE_HOST=namenode
+    volumes:
+      - ./config/datanode:/home/hadoop/hadoop/etc/hadoop
+      - datanode1_data:/home/hadoop/hdfs/datanode
+      - ./scripts:/home/hadoop/scripts
+    networks:
+      - hadoop-network
+    command: /home/hadoop/scripts/start-datanode.sh
+
+  datanode2:
+    image: hadoop-multi:latest
+    container_name: datanode2
+    hostname: datanode2
+    depends_on:
+      - namenode
+    ports:
+      - "9865:9864"
+      - "50076:50075"
+    environment:
+      - NODE_TYPE=datanode
+      - NAMENODE_HOST=namenode
+    volumes:
+      - ./config/datanode:/home/hadoop/hadoop/etc/hadoop
+      - datanode2_data:/home/hadoop/hdfs/datanode
+      - ./scripts:/home/hadoop/scripts
+    networks:
+      - hadoop-network
+    command: /home/hadoop/scripts/start-datanode.sh
+
+  resourcemanager:
+    image: hadoop-multi:latest
+    container_name: resourcemanager
+    hostname: resourcemanager
+    depends_on:
+      - namenode
+    ports:
+      - "8088:8088"
+      - "8030:8030"
+      - "8031:8031"
+      - "8032:8032"
+      - "8033:8033"
+    environment:
+      - NODE_TYPE=resourcemanager
+    volumes:
+      - ./config/resourcemanager:/home/hadoop/hadoop/etc/hadoop
+      - ./scripts:/home/hadoop/scripts
+    networks:
+      - hadoop-network
+    command: ["/bin/bash","-lc","sed -i 's/\\r$//' /home/hadoop/scripts/*.sh && chmod +x /home/hadoop/scripts/*.sh && exec /home/hadoop/scripts/start-resourcemanager.sh"]
+
+  nodemanager1:
+    image: hadoop-multi:latest
+    container_name: nodemanager1
+    hostname: nodemanager1
+    depends_on:
+      - resourcemanager
+      - datanode1
+    ports:
+      - "8042:8042"
+    environment:
+      - NODE_TYPE=nodemanager
+      - RESOURCEMANAGER_HOST=resourcemanager
+    volumes:
+      - ./config/nodemanager:/home/hadoop/hadoop/etc/hadoop
+      - ./scripts:/home/hadoop/scripts
+    networks:
+      - hadoop-network
+    command: ["/bin/bash","-lc","sed -i 's/\\r$//' /home/hadoop/scripts/*.sh && chmod +x /home/hadoop/scripts/*.sh && exec /home/hadoop/scripts/start-nodemanager.sh"]
+
+  nodemanager2:
+    image: hadoop-multi:latest
+    container_name: nodemanager2
+    hostname: nodemanager2
+    depends_on:
+      - resourcemanager
+      - datanode2
+    ports:
+      - "8043:8042"
+    environment:
+      - NODE_TYPE=nodemanager
+      - RESOURCEMANAGER_HOST=resourcemanager
+    volumes:
+      - ./config/nodemanager:/home/hadoop/hadoop/etc/hadoop
+      - ./scripts:/home/hadoop/scripts
+    networks:
+      - hadoop-network
+    command: ["/bin/bash","-lc","sed -i 's/\\r$//' /home/hadoop/scripts/*.sh && chmod +x /home/hadoop/scripts/*.sh && exec /home/hadoop/scripts/start-nodemanager.sh"]
 
 volumes:
-  hadoop-data:
+  namenode_data:
+  datanode1_data:
+  datanode2_data:
+
+networks:
+  hadoop-network:
+    driver: bridge
