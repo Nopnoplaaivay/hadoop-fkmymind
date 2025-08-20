@@ -8,7 +8,6 @@ services:
     ports:
       - "9870:9870"
       # - "9000:9000"
-      - "50070:50070"
     environment:
       - CLUSTER_NAME=hadoop-cluster
       - NODE_TYPE=namenode
@@ -28,7 +27,6 @@ services:
       - namenode
     ports:
       - "9864:9864"
-      - "50075:50075"
     environment:
       - NODE_TYPE=datanode
       - NAMENODE_HOST=namenode
@@ -48,7 +46,6 @@ services:
       - namenode
     ports:
       - "9865:9864"
-      - "50076:50075"
     environment:
       - NODE_TYPE=datanode
       - NAMENODE_HOST=namenode

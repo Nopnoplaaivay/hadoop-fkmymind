@@ -1,0 +1,179 @@
+HADOOP MULTI‑NODE (Docker Compose) — KIẾN TRÚC, ĐỊA CHỈ & CÁCH KẾT NỐI
+=====================================================================
+
+❖ Mục tiêu
+-----------
+Cụm Hadoop nhiều nút chạy bằng Docker Compose, mô phỏng một cluster HDFS + YARN tối giản:
+- HDFS: 1 NameNode + 2 DataNode (replication = 2).
+- YARN: 1 ResourceManager + 2 NodeManager (chạy MapReduce trên YARN).
+- Tất cả cùng chung một mạng Docker bridge (`hadoop-network`).
+
+Các thành phần & vai trò
+------------------------
+1) NameNode (hostname: `namenode`)
+   - Vai trò: giữ metadata HDFS (namespace, block map), điều phối DataNode (block placement, heartbeat).
+   - Cấu hình HDFS chính:
+     • fs.defaultFS = hdfs://namenode:9000 (điểm vào HDFS cho toàn cluster)
+     • dfs.namenode.name.dir = /home/hadoop/hdfs/namenode (siêu dữ liệu HDFS)
+     • dfs.webhdfs.enabled = true (bật WebHDFS)
+     • dfs.permissions.enabled = false (đơn giản hoá quyền khi lab)
+   - Khởi động: format nếu thư mục `namenode/current` chưa tồn tại, sau đó chạy `hdfs namenode`.
+   - UI: NameNode Web UI 9870 (được publish ra host).
+
+2) DataNode 1 & 2 (hostname: `datanode1`, `datanode2`)
+   - Vai trò: lưu block dữ liệu, gửi heartbeat & block report về NameNode.
+   - Cấu hình HDFS trên DataNode:
+     • dfs.datanode.data.dir = /home/hadoop/hdfs/datanode
+     • dfs.replication = 2 (mức sao chép mặc định)
+     • Tắt kiểm tra ip-hostname & permissions để triển khai nhanh trong lab.
+   - Khởi động: đợi cổng 9000 của NameNode khả dụng rồi chạy `hdfs datanode`.
+
+3) ResourceManager (hostname: `resourcemanager`)
+   - Vai trò: điều phối tài nguyên YARN, nhận Application (MR jobs), cấp container, theo dõi tiến độ.
+   - Cổng nội bộ YARN:
+     • Address:         resourcemanager:8032
+     • Scheduler:       resourcemanager:8030
+     • ResourceTracker: resourcemanager:8031
+     • Admin:           resourcemanager:8033
+     • Web UI:          resourcemanager:8088 (publish ra host)
+   - Khởi động: đợi NameNode sẵn sàng (9000) rồi `yarn resourcemanager`.
+
+4) NodeManager 1 & 2 (hostname: `nodemanager1`, `nodemanager2`)
+   - Vai trò: quản lý container trên mỗi máy công nhân, báo cáo tài nguyên/heartbeat cho ResourceManager.
+   - Cấu hình đáng chú ý:
+     • yarn.resourcemanager.hostname = resourcemanager
+     • Dịch vụ phụ mapreduce_shuffle bật sẵn.
+     • Giới hạn tài nguyên ví dụ: memory = 2048 MB, cpu-vcores = 2 (điều chỉnh được).
+   - Khởi động: đợi cổng 8032 của ResourceManager khả dụng rồi chạy `yarn nodemanager`.
+
+Mạng & Địa chỉ
+--------------
+• Mạng nội bộ Docker: `hadoop-network` (driver: bridge). Mỗi service dùng hostname tương ứng (ví dụ `namenode`, `resourcemanager`) để gọi nhau.
+• Cổng publish ra host (tuỳ phiên bản compose, có thể khác nhau nhẹ):
+  - NameNode UI: 9870:9870 → http://localhost:9870
+  - (Tuỳ version: HDFS RPC 9000 có thể publish 9000:9000; nếu KHÔNG publish, client bên ngoài chỉ truy cập UI, còn các container vẫn truy cập nội bộ qua `namenode:9000`)
+  - DataNode:
+      • datanode1: 9864:9864 (UI/HTTP), 50075:50075 (HTTP cũ)
+      • datanode2: 9865:9864,       50076:50075
+  - ResourceManager:
+      • 8088:8088 (Web UI), 8030/8031/8032/8033: publish ra host để tiện debug
+  - NodeManager:
+      • nodemanager1: 8042:8042
+      • nodemanager2: 8043:8042
+
+Mount & Lưu trữ dữ liệu
+-----------------------
+• Volumes đặt tên để giữ trạng thái khi container recreate:
+  - namenode_data  → /home/hadoop/hdfs/namenode
+  - datanode1_data → /home/hadoop/hdfs/datanode
+  - datanode2_data → /home/hadoop/hdfs/datanode
+• Thư mục cấu hình được bind-mount riêng cho từng loại node:
+  - ./config/namenode      → /home/hadoop/hadoop/etc/hadoop (NameNode)
+  - ./config/datanode      → ... (DataNode)
+  - ./config/resourcemanager → ... (ResourceManager)
+  - ./config/nodemanager   → ... (NodeManager)
+• Thư mục scripts (dùng chung): ./scripts → /home/hadoop/scripts
+
+Luồng khởi động & kết nối (tự động hoá bằng shell scripts)
+----------------------------------------------------------
+1) NameNode:
+   - Bật SSH (để tương thích một số tiện ích), chờ 5s, format lần đầu nếu cần, rồi chạy `hdfs namenode`.
+
+2) ResourceManager:
+   - Bật SSH, chờ HDFS sẵn sàng (`nc -z namenode 9000`), sau đó chạy `yarn resourcemanager`.
+   - Công bố Web UI ở 8088.
+
+3) DataNode (mỗi node):
+   - Bật SSH, delay ngắn, đợi NameNode mở 9000, rồi chạy `hdfs datanode`.
+   - Sau khi lên, DataNode sẽ heartbeat & gửi block report về NameNode.
+
+4) NodeManager (mỗi node):
+   - Bật SSH, đợi ResourceManager mở 8032, rồi chạy `yarn nodemanager`.
+   - Từ đây NM định kỳ heartbeat về RM, báo tài nguyên & tình trạng container.
+
+Cấu hình Hadoop quan trọng
+--------------------------
+• HDFS (core-site.xml & hdfs-site.xml):
+  - fs.defaultFS = hdfs://namenode:9000
+  - dfs.replication = 2
+  - dfs.namenode.name.dir = /home/hadoop/hdfs/namenode
+  - dfs.datanode.data.dir = /home/hadoop/hdfs/datanode
+  - dfs.webhdfs.enabled = true
+  - (Lab) Tắt permission & ip-hostname check để giảm lỗi vặt trong môi trường Docker.
+
+• MapReduce (mapred-site.xml cho mọi node):
+  - mapreduce.framework.name = yarn
+  - mapreduce.application.classpath = $HADOOP_MAPRED_HOME/share/hadoop/mapreduce/*:... 
+  - Biến môi trường HADOOP_MAPRED_HOME đã được set trong image.
+
+• YARN (resourcemanager & nodemanager):
+  - resourcemanager:
+      • hostname = resourcemanager
+      • address: 8032, scheduler: 8030, resource-tracker: 8031, admin: 8033, webapp: 8088
+  - nodemanager:
+      • kết nối tới resourcemanager
+      • bật mapreduce_shuffle
+      • env‑whitelist bao gồm JAVA_HOME, HADOOP_* để container MR sử dụng
+      • tài nguyên mặc định: memory‑mb = 2048, cpu‑vcores = 2 (có thể chỉnh)
+
+Hình ảnh Docker (Dockerfile.multi) — các điểm chính
+---------------------------------------------------
+• Base: Ubuntu 20.04 + OpenJDK 8.
+• Cài thêm: ssh, rsync, curl, wget, netcat…
+• Tạo user `hadoop`, cấp sudo (NOPASSWD) để script dễ vận hành.
+• Tải Hadoop 3.3.4, thiết lập các biến môi trường (HADOOP_HOME, YARN_HOME, PATH…).
+• Thiết lập SSH key nội bộ cho user `hadoop` (self‑authorized) để các công cụ Hadoop có thể dùng khi cần.
+• EXPOSE nhiều cổng Hadoop/YARN phổ biến (9870, 9864, 8088, 9000, 8030–8033, 8042,…).
+
+Cách dữ liệu & job chạy qua cụm (ví dụ MapReduce on YARN)
+---------------------------------------------------------
+1) Người dùng nộp job (mapreduce) → YARN ResourceManager (qua client trong container hoặc từ host nếu cấu hình/publish phù hợp).
+2) RM cấp phát ApplicationMaster (AM) trong một container trên một NodeManager.
+3) AM yêu cầu container cho Map/Reduce tasks; mỗi container chạy trên NodeManager tương ứng.
+4) Các task đọc/ghi dữ liệu trực tiếp với HDFS (qua `fs.defaultFS` → NameNode → DataNode).
+5) Khi xong, kết quả nằm trong HDFS, theo replication policy.
+
+Địa chỉ/UI & kiểm tra nhanh
+---------------------------
+• NameNode Web UI: http://localhost:9870
+• ResourceManager Web UI: http://localhost:8088
+• Liệt kê node YARN:  `yarn node -list`
+• Báo cáo HDFS:       `hdfs dfsadmin -report`
+• Duyệt HDFS:         `hdfs dfs -ls /`
+• Chạy job mẫu:       `hadoop jar $HADOOP_HOME/share/hadoop/mapreduce/hadoop-mapreduce-examples-*.jar pi 2 100`
+
+Ghi chú triển khai
+------------------
+• Nếu thấy cổng 9000 không publish (do cấu hình compose phiên bản A/B), client từ host chỉ truy cập UI; còn các container vẫn kết nối nội bộ qua `namenode:9000`. Nếu cần client từ host truy cập HDFS RPC, bật map 9000:9000.
+• Trong môi trường lab, việc tắt permission & ip‑hostname check giúp tránh lỗi mismatch hostname/permission khi chạy trong Docker.
+• Mọi config được mount theo từng vai trò (namenode/datanode/resourcemanager/nodemanager), tiện ghi đè khi cần tinh chỉnh.
+
+Sơ đồ ASCII nhanh
+-----------------
+               +-------------------------+
+               |       ResourceManager   |
+               | 8030/31/32/33, UI 8088 |
+               +-----------+-------------+
+                           |
+                   heartbeats/alloc
+                           |
+      +--------------------+--------------------+
+      |                                         |
++-----v-------+                           +-----v-------+
+| NodeManager | 8042                      | NodeManager | 8042
+| (worker 1)  |                           | (worker 2)  |
++-----+-------+                           +-----+-------+
+      |   containers (Map/Reduce)               |   containers
+      |                                         |
+      |                                         |
++-----v-----------------------------------------v-----+
+|                     H D F S                           |
+|  +-----------+            blocks            +-------+ |
+|  | NameNode  |<---------------------------->| DNs   | |
+|  | :9000, UI |  metadata (RPC)             | 9864  | |
+|  +-----------+                               +------+ |
++-------------------------------------------------------+
+
+Kết luận
+--------
+Cụm multi‑node này tách bạch rõ: HDFS (NN + DN) và YARN (RM + NM). Tất cả tham chiếu nhau qua hostname nội bộ trong mạng Docker, còn UI/chức năng cần thiết được publish ra host để theo dõi & thử nghiệm. Thiết lập tối giản nhưng đầy đủ để học, test job MapReduce và làm quen với hành vi cluster thực tế.
