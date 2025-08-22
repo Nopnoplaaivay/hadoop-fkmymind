@@ -6,7 +6,7 @@ HADOOP MULTI‑NODE (Docker Compose) — KIẾN TRÚC, ĐỊA CHỈ & CÁCH KẾ
 Cụm Hadoop nhiều nút chạy bằng Docker Compose, mô phỏng một cluster HDFS + YARN tối giản:
 - HDFS: 1 NameNode + 2 DataNode (replication = 2).
 - YARN: 1 ResourceManager + 2 NodeManager (chạy MapReduce trên YARN).
-- Tất cả cùng chung một mạng Docker bridge (`hadoop-network`).
+- Tất cả cùng chung một mạng Docker bridge (`shnetwork`).
 
 Các thành phần & vai trò
 ------------------------
@@ -48,7 +48,7 @@ Các thành phần & vai trò
 
 Mạng & Địa chỉ
 --------------
-• Mạng nội bộ Docker: `hadoop-network` (driver: bridge). Mỗi service dùng hostname tương ứng (ví dụ `namenode`, `resourcemanager`) để gọi nhau.
+• Mạng nội bộ Docker: `shnetwork` (driver: bridge). Mỗi service dùng hostname tương ứng (ví dụ `namenode`, `resourcemanager`) để gọi nhau.
 • Cổng publish ra host (tuỳ phiên bản compose, có thể khác nhau nhẹ):
   - NameNode UI: 9870:9870 → http://localhost:9870
   - (Tuỳ version: HDFS RPC 9000 có thể publish 9000:9000; nếu KHÔNG publish, client bên ngoài chỉ truy cập UI, còn các container vẫn truy cập nội bộ qua `namenode:9000`)

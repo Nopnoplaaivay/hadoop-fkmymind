@@ -1,0 +1,158 @@
+version: '3.8'
+
+services:
+  spark-master:
+    image: spark-hadoop:latest
+    container_name: spark-master
+    hostname: spark-master
+    environment:
+      - SPARK_MODE=master
+      - SPARK_MASTER_HOST=spark-master
+      - SPARK_MASTER_PORT=7077
+      - SPARK_MASTER_WEBUI_PORT=8080
+      - HADOOP_CONF_DIR=/home/spark/hadoop-conf
+    ports:
+      - "8080:8080"   # Spark Master Web UI
+      - "7077:7077"   # Spark Master Port
+      - "4040:4040"   # Spark Application UI
+      - "18080:18080" # Spark History Server
+    volumes:
+      - ./spark-conf:/home/spark/spark/conf
+      - ./hadoop-conf:/home/spark/hadoop-conf
+      - ./notebooks:/home/spark/notebooks
+      - ./data:/home/spark/data
+      - spark-logs:/home/spark/spark-logs
+    networks:
+      - shnetwork
+    command: |
+      bash -c "
+        # Copy Hadoop config from namenode
+        cp /home/spark/hadoop-conf/* /home/spark/hadoop/etc/hadoop/ 2>/dev/null || true
+        
+        # Start Spark Master
+        /home/spark/spark/sbin/start-master.sh
+        
+        # Start History Server
+        /home/spark/spark/sbin/start-history-server.sh
+        
+        # Keep container running
+        tail -f /home/spark/spark/logs/*
+      "
+
+  spark-worker1:
+    image: spark-hadoop:latest
+    container_name: spark-worker1
+    hostname: spark-worker1
+    depends_on:
+      - spark-master
+    environment:
+      - SPARK_MODE=worker
+      - SPARK_MASTER_URL=spark://spark-master:7077
+      - SPARK_WORKER_CORES=2
+      - SPARK_WORKER_MEMORY=2g
+      - SPARK_WORKER_PORT=8881
+      - SPARK_WORKER_WEBUI_PORT=8081
+      - HADOOP_CONF_DIR=/home/spark/hadoop-conf
+    ports:
+      - "8081:8081"  # Worker 1 Web UI
+      - "4041:4041"  # Application UI
+    volumes:
+      - ./spark-conf:/home/spark/spark/conf
+      - ./hadoop-conf:/home/spark/hadoop-conf
+      - ./data:/home/spark/data
+      - spark-logs:/home/spark/spark-logs
+    networks:
+      - shnetwork
+    command: |
+      bash -c "
+        # Wait for master
+        sleep 10
+        
+        # Copy Hadoop config
+        cp /home/spark/hadoop-conf/* /home/spark/hadoop/etc/hadoop/ 2>/dev/null || true
+        
+        # Start Spark Worker
+        /home/spark/spark/sbin/start-worker.sh spark://spark-master:7077
+        
+        # Keep container running
+        tail -f /home/spark/spark/logs/*
+      "
+
+  spark-worker2:
+    image: spark-hadoop:latest
+    container_name: spark-worker2
+    hostname: spark-worker2
+    depends_on:
+      - spark-master
+    environment:
+      - SPARK_MODE=worker
+      - SPARK_MASTER_URL=spark://spark-master:7077
+      - SPARK_WORKER_CORES=2
+      - SPARK_WORKER_MEMORY=2g
+      - SPARK_WORKER_PORT=8882
+      - SPARK_WORKER_WEBUI_PORT=8082
+      - HADOOP_CONF_DIR=/home/spark/hadoop-conf
+    ports:
+      - "8082:8082"  # Worker 2 Web UI
+      - "4042:4042"  # Application UI
+    volumes:
+      - ./spark-conf:/home/spark/spark/conf
+      - ./hadoop-conf:/home/spark/hadoop-conf
+      - ./data:/home/spark/data
+      - spark-logs:/home/spark/spark-logs
+    networks:
+      - shnetwork
+    command: |
+      bash -c "
+        # Wait for master
+        sleep 10
+        
+        # Copy Hadoop config
+        cp /home/spark/hadoop-conf/* /home/spark/hadoop/etc/hadoop/ 2>/dev/null || true
+        
+        # Start Spark Worker
+        /home/spark/spark/sbin/start-worker.sh spark://spark-master:7077
+        
+        # Keep container running
+        tail -f /home/spark/spark/logs/*
+      "
+
+  jupyter-pyspark:
+    image: spark-hadoop:latest
+    container_name: jupyter-pyspark
+    hostname: jupyter-pyspark
+    depends_on:
+      - spark-master
+    environment:
+      - SPARK_MASTER=spark://spark-master:7077
+      - HADOOP_CONF_DIR=/home/spark/hadoop-conf
+      - PYSPARK_PYTHON=python3
+      - PYSPARK_DRIVER_PYTHON=jupyter
+      - PYSPARK_DRIVER_PYTHON_OPTS='notebook --no-browser --port=8888 --ip=0.0.0.0 --allow-root --NotebookApp.token="" --NotebookApp.password=""'
+    ports:
+      - "8888:8888"  # Jupyter Notebook
+      - "4043:4040"  # Spark Application UI
+    volumes:
+      - ./spark-conf:/home/spark/spark/conf
+      - ./hadoop-conf:/home/spark/hadoop-conf
+      - ./notebooks:/home/spark/notebooks
+      - ./data:/home/spark/data
+    networks:
+      - shnetwork
+    working_dir: /home/spark/notebooks
+    command: |
+      bash -c "
+        # Copy Hadoop config
+        cp /home/spark/hadoop-conf/* /home/spark/hadoop/etc/hadoop/ 2>/dev/null || true
+        
+        # Start Jupyter with PySpark
+        jupyter notebook --no-browser --port=8888 --ip=0.0.0.0 --allow-root --NotebookApp.token='' --NotebookApp.password=''
+      "
+
+volumes:
+  spark-logs:
+
+networks:
+  shnetwork:
+    external: true
+    name: spark_hadoop_shnetwork
