@@ -7,7 +7,7 @@ services:
     hostname: namenode
     ports:
       - "9870:9870"
-      # - "9000:9000"
+      - "9000:9000"
     environment:
       - CLUSTER_NAME=hadoop-cluster
       - NODE_TYPE=namenode
@@ -30,6 +30,7 @@ services:
     environment:
       - NODE_TYPE=datanode
       - NAMENODE_HOST=namenode
+      - DFS_DATANODE_HOSTNAME=localhost
     volumes:
       - ./config/datanode:/home/hadoop/hadoop/etc/hadoop
       - datanode1_data:/home/hadoop/hdfs/datanode
@@ -49,6 +50,7 @@ services:
     environment:
       - NODE_TYPE=datanode
       - NAMENODE_HOST=namenode
+      - DFS_DATANODE_HOSTNAME=localhost
     volumes:
       - ./config/datanode:/home/hadoop/hadoop/etc/hadoop
       - datanode2_data:/home/hadoop/hdfs/datanode

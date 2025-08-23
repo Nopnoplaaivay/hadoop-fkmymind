@@ -1,6 +1,7 @@
 # setup hadoop
 docker build -t hadoop-multi:latest -f Dockerfile.hadoop.multi .
 docker-compose -f docker-compose.hadoop.yml -p spark_hadoop up -d
+docker-compose -f docker-compose.hadoop.yml -p spark_hadoop down
 docker exec namenode hdfs dfsadmin -report
 docker network ls | findstr hadoop
 bash ./setup-hadoop-multi.sh
