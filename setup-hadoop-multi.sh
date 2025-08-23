@@ -1,21 +1,18 @@
 #!/bin/bash
 echo "Setting up Hadoop Multi-Node Cluster..."
 
-# Create directory structure
-mkdir -p config/{namenode,datanode,resourcemanager,nodemanager}
-mkdir -p scripts
-mkdir -p data
-
 # Make scripts executable
 chmod +x scripts/*.sh
 
 # Build Docker image
 echo "Building Hadoop Multi-Node Docker image..."
-docker build -t hadoop-multi:latest -f Dockerfile.multi .
+docker build -t hadoop-multi:latest -f Dockerfile.hadoop.multi .
+sleep 5
+
 
 # Start the cluster
 echo "Starting Hadoop cluster..."
-docker-compose up -d
+docker-compose -f docker-compose.hadoop.yml -p spark_hadoop up -d
 
 # Wait for services to start
 echo "Waiting for services to initialize..."

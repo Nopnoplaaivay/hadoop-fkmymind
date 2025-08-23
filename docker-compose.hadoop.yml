@@ -16,7 +16,7 @@ services:
       - namenode_data:/home/hadoop/hdfs/namenode
       - ./scripts:/home/hadoop/scripts
     networks:
-      - shnetwork
+      - spark-hadoop-network
     command: /home/hadoop/scripts/start-namenode.sh
 
   datanode1:
@@ -35,7 +35,7 @@ services:
       - datanode1_data:/home/hadoop/hdfs/datanode
       - ./scripts:/home/hadoop/scripts
     networks:
-      - shnetwork
+      - spark-hadoop-network
     command: /home/hadoop/scripts/start-datanode.sh
 
   datanode2:
@@ -54,7 +54,7 @@ services:
       - datanode2_data:/home/hadoop/hdfs/datanode
       - ./scripts:/home/hadoop/scripts
     networks:
-      - shnetwork
+      - spark-hadoop-network
     command: /home/hadoop/scripts/start-datanode.sh
 
   resourcemanager:
@@ -75,7 +75,7 @@ services:
       - ./config/resourcemanager:/home/hadoop/hadoop/etc/hadoop
       - ./scripts:/home/hadoop/scripts
     networks:
-      - shnetwork
+      - spark-hadoop-network
     command: ["/bin/bash","-lc","sed -i 's/\\r$//' /home/hadoop/scripts/*.sh && chmod +x /home/hadoop/scripts/*.sh && exec /home/hadoop/scripts/start-resourcemanager.sh"]
 
   nodemanager1:
@@ -94,7 +94,7 @@ services:
       - ./config/nodemanager:/home/hadoop/hadoop/etc/hadoop
       - ./scripts:/home/hadoop/scripts
     networks:
-      - shnetwork
+      - spark-hadoop-network
     command: ["/bin/bash","-lc","sed -i 's/\\r$//' /home/hadoop/scripts/*.sh && chmod +x /home/hadoop/scripts/*.sh && exec /home/hadoop/scripts/start-nodemanager.sh"]
 
   nodemanager2:
@@ -113,7 +113,7 @@ services:
       - ./config/nodemanager:/home/hadoop/hadoop/etc/hadoop
       - ./scripts:/home/hadoop/scripts
     networks:
-      - shnetwork
+      - spark-hadoop-network
     command: ["/bin/bash","-lc","sed -i 's/\\r$//' /home/hadoop/scripts/*.sh && chmod +x /home/hadoop/scripts/*.sh && exec /home/hadoop/scripts/start-nodemanager.sh"]
 
 volumes:
@@ -122,5 +122,6 @@ volumes:
   datanode2_data:
 
 networks:
-  shnetwork:
+  spark-hadoop-network:
     driver: bridge
+    name: spark-hadoop-network

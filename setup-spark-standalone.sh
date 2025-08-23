@@ -3,26 +3,29 @@
 echo "=== Setting up Spark with Hadoop Integration ==="
 echo ""
 
-docker build -t spark-hadoop:latest -f Dockerfile.spark .
+export MSYS_NO_PATHCONV=1
+
+docker build -t spark-hadoop:latest -f Dockerfile.spark.standalone .
 
 # Create directories in HDFS for Spark
-echo "Creating HDFS directories for Spark..."
+echo "[1] Creating HDFS directories for Spark..."
 docker exec namenode hdfs dfs -mkdir -p /spark-logs
 docker exec namenode hdfs dfs -mkdir -p /spark-jars
 docker exec namenode hdfs dfs -chmod 777 /spark-logs
 docker exec namenode hdfs dfs -chmod 777 /spark-jars
 
 # Start Spark cluster
-echo "Starting Spark cluster..."
+echo "[2] Starting Spark cluster..."
 docker-compose -f docker-compose.spark.yml -p spark_hadoop up -d
 
 # Wait for services to start
-echo "Waiting for services to initialize..."
+echo "[3] Waiting for services to initialize..."
 sleep 20
 
 # Verify Spark cluster
 echo ""
 echo "=== Spark Cluster Status ==="
+echo "[4] Checking Spark version..."
 docker exec spark-master /home/spark/spark/bin/spark-submit --version
 
 echo ""
@@ -36,4 +39,4 @@ echo ""
 echo "Hadoop NameNode UI: http://localhost:9870"
 echo "YARN ResourceManager UI: http://localhost:8088"
 echo ""
-echo "Spark cluster setup complete!"
+echo "[5] Spark cluster setup complete!"
